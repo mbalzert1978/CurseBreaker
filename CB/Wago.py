@@ -81,14 +81,11 @@ class PlaterParser(BaseParser):
             data = file.read().replace('PlaterDB = {', '{')
         platerdata = self.lua.eval(data)
         for profile in platerdata['profiles']:
-            data = platerdata['profiles'][profile]['script_data']
-            if data:
+            if data := platerdata['profiles'][profile]['script_data']:
                 self.parse_storage_internal(data)
-            data = platerdata['profiles'][profile]['hook_data']
-            if data:
+            if data := platerdata['profiles'][profile]['hook_data']:
                 self.parse_storage_internal(data)
-            data = platerdata['profiles'][profile]['url']
-            if data:
+            if data := platerdata['profiles'][profile]['url']:
                 search = self.urlParser.search(data)
                 if search is not None and search.group(1) and search.group(2):
                     self.ids[profile] = search.group(1)
@@ -128,10 +125,12 @@ class WagoUpdater:
                 raise RuntimeError
             for entry in payload:
                 if 'username' in entry and (not self.username or entry['username'] != self.username):
-                    if not entry['slug'] in addon.list:
+                    if entry['slug'] not in addon.list:
                         entry['slug'] = entry['_id']
-                    if entry['version'] > addon.list[entry['slug']] and (not entry['slug'] in addon.ignored or
-                       (entry['slug'] in addon.ignored and entry['version'] != addon.ignored[entry['slug']])):
+                    if entry['version'] > addon.list[entry['slug']] and (
+                        entry['slug'] not in addon.ignored
+                        or entry['version'] != addon.ignored[entry['slug']]
+                    ):
                         output[0].append([entry['name'], entry['url']])
                         self.update_entry(entry, addon)
                     elif 'name' in entry:
@@ -162,30 +161,29 @@ class WagoUpdater:
         return output
 
     def parse_changelog(self, entry):
-        if 'changelog' in entry and 'text' in entry['changelog']:
-            if entry['changelog']['format'] == 'bbcode':
-                return self.bbParser.strip(entry['changelog']['text'])
-            elif entry['changelog']['format'] == 'markdown':
-                return self.mdParser.convert(entry['changelog']['text'])
-        else:
+        if 'changelog' not in entry or 'text' not in entry['changelog']:
             return ''
+        if entry['changelog']['format'] == 'bbcode':
+            return self.bbParser.strip(entry['changelog']['text'])
+        elif entry['changelog']['format'] == 'markdown':
+            return self.mdParser.convert(entry['changelog']['text'])
 
     @retry('Failed to parse Wago data. Wago might be down or provided API key is incorrect.')
     def update_entry(self, entry, addon):
         raw = requests.get(f'https://data.wago.io/api/raw/encoded?id={quote_plus(entry["slug"])}',
                            headers={'api-key': self.apiKey, 'User-Agent': HEADERS['User-Agent']}, timeout=15).text
         slug = f'        ["{entry["slug"]}"] = {{\n          name = [=[{entry["name"]}]=],\n          author = [=[' \
-               f'{entry["username"]}]=],\n          encoded = [=[{raw}]=],\n          wagoVersion = [=[' \
-               f'{entry["version"]}]=],\n          wagoSemver = [=[{entry["versionString"]}]=],\n          ' \
-               f'versionNote = [=[{self.parse_changelog(entry)}]=],\n        }},\n'
+                   f'{entry["username"]}]=],\n          encoded = [=[{raw}]=],\n          wagoVersion = [=[' \
+                   f'{entry["version"]}]=],\n          wagoSemver = [=[{entry["versionString"]}]=],\n          ' \
+                   f'versionNote = [=[{self.parse_changelog(entry)}]=],\n        }},\n'
         uids = ''
         ids = ''
         for u in addon.uids:
             if addon.uids[u] == entry["slug"]:
-                uids = uids + f'        ["{self.clean_string(u)}"] = [=[{entry["slug"]}]=],\n'
+                uids = f'{uids}        ["{self.clean_string(u)}"] = [=[{entry["slug"]}]=],\n'
         for i in addon.ids:
             if addon.ids[i] == entry["slug"]:
-                ids = ids + f'        ["{self.clean_string(i)}"] = [=[{entry["slug"]}]=],\n'
+                ids = f'{ids}        ["{self.clean_string(i)}"] = [=[{entry["slug"]}]=],\n'
         addon.data['slugs'].append(slug)
         addon.data['uids'].append(uids)
         addon.data['ids'].append(ids)

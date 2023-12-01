@@ -27,17 +27,13 @@ class KBHit:
             termios.tcsetattr(self.fd, termios.TCSAFLUSH, self.old_term)
 
     def getch(self):
-        if system == 'Windows':
-            return msvcrt.getch()
-        else:
-            return sys.stdin.read(1)
+        return msvcrt.getch() if system == 'Windows' else sys.stdin.read(1)
 
     def kbhit(self):
         if system == 'Windows':
             return msvcrt.kbhit()
-        else:
-            dr, dw, de = select([sys.stdin], [], [], 0)
-            return dr != []
+        dr, dw, de = select([sys.stdin], [], [], 0)
+        return dr != []
 
 
 def pause(headless):

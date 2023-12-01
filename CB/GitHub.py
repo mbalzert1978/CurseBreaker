@@ -17,16 +17,15 @@ class GitHubAddon:
             raise RuntimeError(f'{project}\nGitHub API failed to respond.')
         if self.payload.status_code == 404:
             raise RuntimeError(url)
-        else:
-            self.payload = self.payload.json()
-            for release in self.payload:
-                if release['assets'] and len(release['assets']) > 0\
+        self.payload = self.payload.json()
+        for release in self.payload:
+            if release['assets'] and len(release['assets']) > 0\
                         and not release['draft'] and not release['prerelease']:
-                    self.payload = release
-                    break
-            else:
-                raise RuntimeError(f'{url}\nThis integration supports only the projects that provide packaged '
-                                   f'releases.')
+                self.payload = release
+                break
+        else:
+            raise RuntimeError(f'{url}\nThis integration supports only the projects that provide packaged '
+                               f'releases.')
         self.name = project.split('/')[1]
         self.clientType = clienttype
         self.currentVersion = self.payload['tag_name'] or self.payload['name']
@@ -106,7 +105,7 @@ class GitHubAddon:
             if '/' not in os.path.dirname(file):
                 self.directories.append(os.path.dirname(file))
         self.directories = list(filter(None, set(self.directories)))
-        if len(self.directories) == 0:
+        if not self.directories:
             raise RuntimeError(f'{self.name}.\nProject package is corrupted or incorrectly packaged.')
 
     def install(self, path):
