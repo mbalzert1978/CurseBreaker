@@ -90,54 +90,59 @@ class Core:
             json.dump(self.config, outfile, sort_keys=True, indent=4, separators=(',', ': '))
 
     def update_config(self):
-        if 'Version' not in self.config.keys() or self.config['Version'] != __version__:
-            urlupdate = {'elvui-classic': 'elvui', 'elvui-classic:dev': 'elvui:dev', 'tukui-classic': 'tukui',
-                         'sle:dev': 'shadow&light:dev', 'elvui:beta': 'elvui:dev'}
-            for addon in self.config['Addons']:
+        if (
+            'Version' in self.config.keys()
+            and self.config['Version'] == __version__
+        ):
+            return
+        urlupdate = {'elvui-classic': 'elvui', 'elvui-classic:dev': 'elvui:dev', 'tukui-classic': 'tukui',
+                     'sle:dev': 'shadow&light:dev', 'elvui:beta': 'elvui:dev'}
+        for addon in self.config['Addons']:
                 # 1.1.0
-                if 'Checksums' not in addon.keys():
-                    checksums = {}
-                    for directory in addon['Directories']:
-                        checksums[directory] = dirhash(self.path / directory)
-                    addon['Checksums'] = checksums
-                # 1.1.1
-                if addon['Version'] is None:
-                    addon['Version'] = '1'
-                # 2.2.0, 3.9.4, 3.12.0
-                if addon['URL'].lower() in urlupdate:
-                    addon['URL'] = urlupdate[addon['URL'].lower()]
-                # 2.4.0
-                if addon['Name'] == 'TukUI':
-                    addon['Name'] = 'Tukui'
-                    addon['URL'] = 'Tukui'
-                # 2.7.3
-                addon['Directories'] = list(filter(None, set(addon['Directories'])))
-                # 3.0.2
-                if addon['URL'].endswith('/'):
-                    addon['URL'] = addon['URL'][:-1]
-                # 3.3.0
-                if 'Development' in addon.keys() and isinstance(addon['Development'], bool):
-                    addon['Development'] = 1
-            for add in [['2.1.0', 'WAUsername', ''],
-                        ['2.2.0', 'WAAccountName', ''],
-                        ['2.2.0', 'WAAPIKey', ''],
-                        ['2.2.0', 'WACompanionVersion', 0],
-                        ['2.8.0', 'IgnoreClientVersion', {}],
-                        ['3.0.1', 'CFCacheTimestamp', 0],
-                        ['3.1.10', 'CFCacheCloudFlare', {}],
-                        ['3.7.0', 'CompactMode', False],
-                        ['3.10.0', 'AutoUpdate', True],
-                        ['3.12.0', 'ShowAuthors', True],
-                        ['3.16.0', 'IgnoreDependencies', {}],
-                        ['3.18.0', 'WAStash', []]]:
-                if add[1] not in self.config.keys():
-                    self.config[add[1]] = add[2]
-            for delete in [['1.3.0', 'URLCache'],
-                           ['3.0.1', 'CurseCache']]:
-                if delete[1] in self.config.keys():
-                    self.config.pop(delete[1], None)
-            self.config['Version'] = __version__
-            self.save_config()
+            if 'Checksums' not in addon.keys():
+                checksums = {
+                    directory: dirhash(self.path / directory)
+                    for directory in addon['Directories']
+                }
+                addon['Checksums'] = checksums
+            # 1.1.1
+            if addon['Version'] is None:
+                addon['Version'] = '1'
+            # 2.2.0, 3.9.4, 3.12.0
+            if addon['URL'].lower() in urlupdate:
+                addon['URL'] = urlupdate[addon['URL'].lower()]
+            # 2.4.0
+            if addon['Name'] == 'TukUI':
+                addon['Name'] = 'Tukui'
+                addon['URL'] = 'Tukui'
+            # 2.7.3
+            addon['Directories'] = list(filter(None, set(addon['Directories'])))
+            # 3.0.2
+            if addon['URL'].endswith('/'):
+                addon['URL'] = addon['URL'][:-1]
+            # 3.3.0
+            if 'Development' in addon.keys() and isinstance(addon['Development'], bool):
+                addon['Development'] = 1
+        for add in [['2.1.0', 'WAUsername', ''],
+                    ['2.2.0', 'WAAccountName', ''],
+                    ['2.2.0', 'WAAPIKey', ''],
+                    ['2.2.0', 'WACompanionVersion', 0],
+                    ['2.8.0', 'IgnoreClientVersion', {}],
+                    ['3.0.1', 'CFCacheTimestamp', 0],
+                    ['3.1.10', 'CFCacheCloudFlare', {}],
+                    ['3.7.0', 'CompactMode', False],
+                    ['3.10.0', 'AutoUpdate', True],
+                    ['3.12.0', 'ShowAuthors', True],
+                    ['3.16.0', 'IgnoreDependencies', {}],
+                    ['3.18.0', 'WAStash', []]]:
+            if add[1] not in self.config.keys():
+                self.config[add[1]] = add[2]
+        for delete in [['1.3.0', 'URLCache'],
+                       ['3.0.1', 'CurseCache']]:
+            if delete[1] in self.config.keys():
+                self.config.pop(delete[1], None)
+        self.config['Version'] = __version__
+        self.save_config()
 
     def check_if_installed(self, url):
         for addon in self.config['Addons']:
@@ -150,23 +155,13 @@ class Core:
                 return addon
 
     def check_if_dev(self, url):
-        addon = self.check_if_installed(url)
-        if addon:
-            if 'Development' in addon.keys():
-                return addon['Development']
-            else:
-                return 0
+        if addon := self.check_if_installed(url):
+            return addon['Development'] if 'Development' in addon.keys() else 0
         else:
             return 0
 
     def check_if_blocked(self, addon):
-        if addon:
-            if 'Block' in addon.keys():
-                return True
-            else:
-                return False
-        else:
-            return False
+        return bool(addon and 'Block' in addon.keys())
 
     def check_if_dev_global(self):
         for addon in self.config['Addons']:
@@ -217,32 +212,30 @@ class Core:
             if self.clientType == 'wow_retail':
                 clienttype = 'retail'
             elif self.clientType == 'wow_burning_crusade':
-                if url in self.config['IgnoreClientVersion'].keys():
-                    clienttype = 'classic'
-                else:
-                    clienttype = 'burningcrusade'
+                clienttype = (
+                    'classic'
+                    if url in self.config['IgnoreClientVersion'].keys()
+                    else 'burningcrusade'
+                )
+            elif url in self.config['IgnoreClientVersion'].keys():
+                clienttype = 'retail'
             else:
-                if url in self.config['IgnoreClientVersion'].keys():
-                    clienttype = 'retail'
-                else:
-                    clienttype = 'classic'
+                clienttype = 'classic'
             return TownlongYakAddon(url, self.townlongyakCache, clienttype)
         elif url.lower() == 'elvui':
             if self.clientType == 'wow_retail':
                 return TukuiAddon('ElvUI', self.tukuiCache, 'elvui')
-            else:
-                self.bulk_tukui_check()
-                return TukuiAddon('2', self.tukuiCache)
+            self.bulk_tukui_check()
+            return TukuiAddon('2', self.tukuiCache)
         elif url.lower() == 'elvui:dev':
             return GitHubAddonRaw('tukui-org/ElvUI', 'development', ['ElvUI', 'ElvUI_OptionsUI'])
         elif url.lower() == 'tukui':
             if self.clientType == 'wow_retail':
                 return TukuiAddon('Tukui', self.tukuiCache, 'tukui')
-            else:
-                self.bulk_tukui_check()
-                return TukuiAddon('1', self.tukuiCache)
+            self.bulk_tukui_check()
+            return TukuiAddon('1', self.tukuiCache)
         elif url.lower() == 'tukui:dev':
-            if self.clientType == 'wow_retail' or self.clientType == 'wow_burning_crusade':
+            if self.clientType in ['wow_retail', 'wow_burning_crusade']:
                 return GitHubAddonRaw('tukui-org/Tukui', 'Live', ['Tukui'])
             else:
                 return GitHubAddonRaw('tukui-org/Tukui', 'Live-Classic-Era', ['Tukui'])
@@ -312,9 +305,10 @@ class Core:
                 return False, addon['Name'], addon['Version'], None
             self.cleanup(new.directories)
             new.install(self.path)
-            checksums = {}
-            for directory in new.directories:
-                checksums[directory] = dirhash(self.path / directory)
+            checksums = {
+                directory: dirhash(self.path / directory)
+                for directory in new.directories
+            }
             self.config['Addons'].append({'Name': new.name,
                                           'URL': url,
                                           'Version': new.currentVersion,
@@ -323,12 +317,11 @@ class Core:
                                           })
             self.save_config()
             return True, new.name, new.currentVersion, \
-                None if url in self.config['IgnoreDependencies'].keys() else new.dependencies
+                    None if url in self.config['IgnoreDependencies'].keys() else new.dependencies
         return False, addon['Name'], addon['Version'], None
 
     def del_addon(self, url, keep):
-        old = self.check_if_installed(url)
-        if old:
+        if old := self.check_if_installed(url):
             if not keep:
                 self.cleanup(old['Directories'])
             self.config['IgnoreClientVersion'].pop(old['URL'], None)
@@ -340,42 +333,43 @@ class Core:
         return False, False
 
     def update_addon(self, url, update, force):
-        old = self.check_if_installed(url)
-        if old:
-            new = self.parse_url(old['URL'])
-            dev = self.check_if_dev(old['URL'])
-            source, sourceurl = self.parse_url_source(old['URL'])
-            oldversion = old['Version']
-            if old['URL'] in self.checksumCache:
-                modified = self.checksumCache[old['URL']]
-            else:
-                modified = self.check_checksum(old, False)
-            blocked = self.check_if_blocked(old)
-            new.dependencies = None if url in self.config['IgnoreDependencies'].keys() else new.dependencies
-            if force or (new.currentVersion != old['Version'] and update and not modified and not blocked):
-                new.get_addon()
-                self.cleanup(old['Directories'])
-                new.install(self.path)
-                checksums = {}
-                for directory in new.directories:
-                    checksums[directory] = dirhash(self.path / directory)
-                old['Name'] = new.name
-                old['Version'] = new.currentVersion
-                old['Directories'] = new.directories
-                old['Checksums'] = checksums
-                self.save_config()
-            if force:
-                modified = False
-                blocked = False
-            return new.name, new.author, new.currentVersion, oldversion, new.uiVersion, modified, blocked, source, \
+        if not (old := self.check_if_installed(url)):
+            return url, [], False, False, None, False, False, '?', None, None, None, None
+        new = self.parse_url(old['URL'])
+        dev = self.check_if_dev(old['URL'])
+        source, sourceurl = self.parse_url_source(old['URL'])
+        oldversion = old['Version']
+        if old['URL'] in self.checksumCache:
+            modified = self.checksumCache[old['URL']]
+        else:
+            modified = self.check_checksum(old, False)
+        blocked = self.check_if_blocked(old)
+        new.dependencies = None if url in self.config['IgnoreDependencies'].keys() else new.dependencies
+        if force or (new.currentVersion != old['Version'] and update and not modified and not blocked):
+            new.get_addon()
+            self.cleanup(old['Directories'])
+            new.install(self.path)
+            checksums = {
+                directory: dirhash(self.path / directory)
+                for directory in new.directories
+            }
+            old['Name'] = new.name
+            old['Version'] = new.currentVersion
+            old['Directories'] = new.directories
+            old['Checksums'] = checksums
+            self.save_config()
+        if force:
+            modified = False
+            blocked = False
+        return new.name, new.author, new.currentVersion, oldversion, new.uiVersion, modified, blocked, source, \
                 sourceurl, new.changelogUrl, new.dependencies, dev
-        return url, [], False, False, None, False, False, '?', None, None, None, None
 
     def check_checksum(self, addon, bulk=True):
-        checksums = {}
-        for directory in addon['Directories']:
-            if os.path.isdir(self.path / directory):
-                checksums[directory] = dirhash(self.path / directory)
+        checksums = {
+            directory: dirhash(self.path / directory)
+            for directory in addon['Directories']
+            if os.path.isdir(self.path / directory)
+        }
         if bulk:
             return [addon['URL'], len(checksums.items() & addon['Checksums'].items()) != len(addon['Checksums'])]
         else:
@@ -409,8 +403,7 @@ class Core:
             self.save_config()
             return state
         else:
-            addon = self.check_if_installed(url)
-            if addon:
+            if addon := self.check_if_installed(url):
                 if addon['URL'].startswith('https://www.curseforge.com/wow/addons/'):
                     state = self.check_if_dev(url)
                     if state == 0:
@@ -426,8 +419,7 @@ class Core:
             return None
 
     def block_toggle(self, url):
-        addon = self.check_if_installed(url)
-        if addon:
+        if addon := self.check_if_installed(url):
             state = self.check_if_blocked(addon)
             if state:
                 addon.pop('Block', None)
@@ -448,17 +440,15 @@ class Core:
             return self.config[option]
 
     def backup_check(self):
-        if self.config['Backup']['Enabled']:
-            if not os.path.isfile(Path('WTF-Backup', f'{datetime.datetime.now().strftime("%d%m%y")}.zip')):
-                listofbackups = [Path(x) for x in glob.glob('WTF-Backup/*.zip')]
-                if len(listofbackups) == self.config['Backup']['Number']:
-                    oldest_file = min(listofbackups, key=os.path.getctime)
-                    os.remove(oldest_file)
-                return True
-            else:
-                return False
-        else:
+        if not self.config['Backup']['Enabled']:
             return False
+        if os.path.isfile(Path('WTF-Backup', f'{datetime.datetime.now().strftime("%d%m%y")}.zip')):
+            return False
+        listofbackups = [Path(x) for x in glob.glob('WTF-Backup/*.zip')]
+        if len(listofbackups) == self.config['Backup']['Number']:
+            oldest_file = min(listofbackups, key=os.path.getctime)
+            os.remove(oldest_file)
+        return True
 
     def backup_wtf(self, console):
         archive = Path('WTF-Backup', f'{datetime.datetime.now().strftime("%d%m%y")}.zip')
@@ -472,15 +462,15 @@ class Core:
         zipf = zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED)
         filecount = 0
         for _, _, files in os.walk('WTF/', topdown=True, followlinks=True):
-            files = [f for f in files if not f[0] == '.']
+            files = [f for f in files if f[0] != '.']
             filecount += len(files)
         if filecount > 0:
             with Progress('{task.completed}/{task.total}', '|', BarColumn(bar_width=None), '|', auto_refresh=False,
-                          console=console) as progress:
+                                  console=console) as progress:
                 task = progress.add_task('', total=filecount)
                 while not progress.finished:
                     for root, _, files in os.walk('WTF/', topdown=True, followlinks=True):
-                        files = [f for f in files if not f[0] == '.']
+                        files = [f for f in files if f[0] != '.']
                         for f in files:
                             zipf.write(Path(root, f))
                             progress.update(task, advance=1, refresh=True)
@@ -493,8 +483,7 @@ class Core:
         directoriesgit = []
         ignored = ['.DS_Store']
         for addon in self.config['Addons']:
-            for directory in addon['Directories']:
-                directories.append(directory)
+            directories.extend(iter(addon['Directories']))
         for directory in os.listdir(self.path):
             if directory not in directories:
                 if os.path.isdir(self.path / directory / '.git'):
@@ -513,12 +502,9 @@ class Core:
 
     @retry(custom_error='Failed to execute the search.')
     def search(self, query):
-        results = []
         payload = requests.get(f'https://addons-ecs.forgesvc.net/api/v2/addon/search?gameId=1&pageSize=10&searchFilter='
                                f'{quote_plus(query.strip())}', headers=HEADERS, timeout=5).json()
-        for result in payload:
-            results.append(result['websiteUrl'])
-        return results
+        return [result['websiteUrl'] for result in payload]
 
     def create_reg(self):
         with open('CurseBreaker.reg', 'w') as outfile:
@@ -560,9 +546,15 @@ class Core:
             try:
                 if not os.path.isfile(self.cachePath) or time.time() - self.config['CFCacheTimestamp'] > 86400:
                     with open(self.cachePath, 'wb') as f:
-                        f.write(gzip.decompress(requests.get(
-                            f'https://storage.googleapis.com/cursebreaker/cfid.pickle.gz', headers=HEADERS,
-                            timeout=5).content))
+                        f.write(
+                            gzip.decompress(
+                                requests.get(
+                                    'https://storage.googleapis.com/cursebreaker/cfid.pickle.gz',
+                                    headers=HEADERS,
+                                    timeout=5,
+                                ).content
+                            )
+                        )
                     self.config['CFCacheTimestamp'] = int(time.time())
                     self.save_config()
                 with open(self.cachePath, 'rb') as f:
@@ -580,18 +572,18 @@ class Core:
             project = self.cfIDs[slug]
         else:
             try:
-                payload = self.scraper.get(url + '/download-client')
+                payload = self.scraper.get(f'{url}/download-client')
                 if payload.status_code == 404:
                     renamecheck = self.scraper.get(url, allow_redirects=False)
                     if renamecheck.status_code == 303:
                         payload = self.scraper.get(f'https://www.curseforge.com{renamecheck.headers["location"]}'
                                                    f'/download-client')
-                    if payload.status_code == 404:
-                        if bulk:
-                            return 0
-                        else:
-                            raise RuntimeError(f'{slug}\nThe project could be removed from CurseForge or renamed. Unins'
-                                               f'tall it (and reinstall if it still exists) to fix this issue.')
+                if payload.status_code == 404:
+                    if bulk:
+                        return 0
+                    else:
+                        raise RuntimeError(f'{slug}\nThe project could be removed from CurseForge or renamed. Unins'
+                                           f'tall it (and reinstall if it still exists) to fix this issue.')
             except cloudscraper.CloudflareChallengeError:
                 return 0
             xml = parseString(payload.text)
@@ -610,8 +602,7 @@ class Core:
             project = re.search(r'\d+', path).group()
         payload = requests.get(f'https://addons-ecs.forgesvc.net/api/v2/addon/{project}', headers=HEADERS,
                                timeout=5).json()
-        url = payload['websiteUrl'].strip()
-        return url
+        return payload['websiteUrl'].strip()
 
     @retry()
     def bulk_check(self, addons):
@@ -622,12 +613,12 @@ class Core:
                 ids_cf.append(int(self.parse_cf_id(addon['URL'], bulk=True)))
             elif addon['URL'].startswith('https://www.wowinterface.com/downloads/'):
                 ids_wowi.append(re.findall(r'\d+', addon['URL'])[0].strip())
-        if len(ids_cf) > 0:
+        if ids_cf:
             payload = requests.post('https://addons-ecs.forgesvc.net/api/v2/addon', json=ids_cf,
                                     headers=HEADERS, timeout=5).json()
             for addon in payload:
                 self.cfCache[str(addon['id'])] = addon
-        if len(ids_wowi) > 0:
+        if ids_wowi:
             payload = requests.get(f'https://api.mmoui.com/v3/game/WOW/filedetails/{",".join(ids_wowi)}.json',
                                    headers=HEADERS, timeout=5).json()
             if 'ERROR' not in payload:
@@ -653,16 +644,19 @@ class Core:
                                                  headers=HEADERS, timeout=5).json()
 
     def detect_accounts(self):
-        if os.path.isdir(Path('WTF/Account')):
-            accounts = os.listdir(Path('WTF/Account'))
-            accounts_processed = []
-            for account in accounts:
-                if os.path.isfile(Path(f'WTF/Account/{account}/SavedVariables/WeakAuras.lua')) or \
-                        os.path.isfile(Path(f'WTF/Account/{account}/SavedVariables/Plater.lua')):
-                    accounts_processed.append(account)
-            return accounts_processed
-        else:
+        if not os.path.isdir(Path('WTF/Account')):
             return []
+        accounts = os.listdir(Path('WTF/Account'))
+        return [
+            account
+            for account in accounts
+            if os.path.isfile(
+                Path(f'WTF/Account/{account}/SavedVariables/WeakAuras.lua')
+            )
+            or os.path.isfile(
+                Path(f'WTF/Account/{account}/SavedVariables/Plater.lua')
+            )
+        ]
 
     def detect_addons(self):
         if not self.dirIndex:
@@ -677,23 +671,27 @@ class Core:
         miss = []
         for directory in addon_dirs:
             if os.path.isdir(self.path / directory) and not os.path.islink(self.path / directory) and \
-                    not os.path.isdir(self.path / directory / '.git') and not directory.startswith('Blizzard_') and directory not in ignored:
+                        not os.path.isdir(self.path / directory / '.git') and not directory.startswith('Blizzard_') and directory not in ignored:
                 if directory in self.dirIndex['single']['cf']:
                     if len(self.dirIndex['single']['cf'][directory]) > 1:
                         partial_hit.append(self.dirIndex['single']['cf'][directory])
                     elif not self.check_if_installed(f'https://www.curseforge.com/wow/addons/'
                                                      f'{self.dirIndex["single"]["cf"][directory][0]}'):
-                        if not (directory == 'ElvUI_SLE' and self.check_if_installed('Shadow&Light:Dev')):
+                        if (
+                            directory != 'ElvUI_SLE'
+                            or not self.check_if_installed('Shadow&Light:Dev')
+                        ):
                             hit.append(f'cf:{self.dirIndex["single"]["cf"][directory][0]}')
+                elif directory in ['ElvUI', 'Tukui']:
+                    if not self.check_if_installed(directory):
+                        hit.append(directory)
                 else:
-                    if directory == 'ElvUI' or directory == 'Tukui':
-                        if not self.check_if_installed(directory):
-                            hit.append(directory)
-                    else:
-                        miss.append(directory)
+                    miss.append(directory)
         hit = list(set(hit))
         partial_hit.sort()
-        partial_hit = list(partial_hit for partial_hit, _ in itertools.groupby(partial_hit))
+        partial_hit = [
+            partial_hit for partial_hit, _ in itertools.groupby(partial_hit)
+        ]
 
         partial_hit_parsed = []
         for partial in partial_hit:
@@ -720,7 +718,7 @@ class Core:
                         break
                 if complete:
                     partial_hit_temp[addon] = len(directories)
-            if len(partial_hit_temp) > 0:
+            if partial_hit_temp:
                 partial_hit_parsed_max = max(partial_hit_temp.items(), key=lambda x: x[1])
                 partial_hit_parsed_temp = []
                 for key, value in partial_hit_temp.items():
@@ -731,12 +729,17 @@ class Core:
                 for addon in partial:
                     if addon in self.dirIndex['full']['cf']:
                         directories = self.dirIndex['full']['cf'][addon]
-                        for directory in directories:
-                            if os.path.isdir(self.path / directory):
-                                miss.append(directory)
+                        miss.extend(
+                            directory
+                            for directory in directories
+                            if os.path.isdir(self.path / directory)
+                        )
         miss = list(set(miss))
         partial_hit_parsed.sort()
-        partial_hit = list(partial_hit_parsed for partial_hit_parsed, _ in itertools.groupby(partial_hit_parsed))
+        partial_hit = [
+            partial_hit_parsed
+            for partial_hit_parsed, _ in itertools.groupby(partial_hit_parsed)
+        ]
 
         partial_hit_parsed = []
         for addons in partial_hit:
@@ -747,7 +750,7 @@ class Core:
                     if self.check_if_installed(f'https://www.curseforge.com/wow/addons/{addon}'):
                         break
                 else:
-                    addons = ['cf:' + s for s in addons]
+                    addons = [f'cf:{s}' for s in addons]
                     partial_hit_parsed.append(addons)
 
         return sorted(hit), sorted(partial_hit_parsed), sorted(miss)
@@ -793,22 +796,15 @@ class DependenciesParser:
         slugs = []
         processed = []
         for d in self.dependencies:
-            slug = self.core.parse_cf_id(d, reverse=True)
-            if slug:
+            if slug := self.core.parse_cf_id(d, reverse=True):
                 slugs.append(f'https://www.curseforge.com/wow/addons/{slug}')
         if output:
             for s in slugs:
-                installed = self.core.check_if_installed(s)
-                if installed:
+                if installed := self.core.check_if_installed(s):
                     processed.append(installed['Name'])
                 else:
                     processed.append(f'cf:{s}')
             return sorted(processed)
         else:
-            for s in slugs:
-                if not self.core.check_if_installed(s):
-                    processed.append(s)
-            if len(processed) > 0:
-                return ','.join(processed)
-            else:
-                return None
+            processed.extend(s for s in slugs if not self.core.check_if_installed(s))
+            return ','.join(processed) if processed else None

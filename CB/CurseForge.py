@@ -17,7 +17,7 @@ class CurseForgeAddon:
                                             headers=HEADERS, timeout=5)
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
                 raise RuntimeError(f'{url}\nCurseForge API failed to respond.')
-            if self.payload.status_code == 404 or self.payload.status_code == 500:
+            if self.payload.status_code in {404, 500}:
                 raise RuntimeError(f'{url}\nThis might be a temporary issue with CurseForge API or the project was '
                                    f'removed/renamed. In this case, uninstall it (and reinstall if it still exists) '
                                    f'to fix this issue.')
@@ -30,7 +30,7 @@ class CurseForgeAddon:
                 except (StopIteration, JSONDecodeError):
                     raise RuntimeError(f'{url}\nThis might be a temporary issue with CurseForge API.')
         self.name = self.payload['name'].strip().strip('\u200b')
-        if not len(self.payload['gameVersionLatestFiles']) > 0:
+        if len(self.payload['gameVersionLatestFiles']) <= 0:
             raise RuntimeError(f'{self.name}.\nThe project doesn\'t have any releases.')
         self.clientType = clienttype
         self.allowDev = allowdev
@@ -44,9 +44,11 @@ class CurseForgeAddon:
         self.author = []
         self.get_current_version()
 
-        for author in self.payload['authors']:
-            if '_ForgeUser' not in author['name']:
-                self.author.append(author['name'])
+        self.author.extend(
+            author['name']
+            for author in self.payload['authors']
+            if '_ForgeUser' not in author['name']
+        )
 
     def get_current_version(self):
         latestfiles = {1: 0, 2: 0, 3: 0}
@@ -60,13 +62,12 @@ class CurseForgeAddon:
             targetrelease = latestfiles[max(latestfiles, key=latestfiles.get)]
         elif self.allowDev == 2:
             targetrelease = latestfiles[max(latestfiles, key=latestfiles.get)]
-        else:
-            if latestfiles[1] > 0:
-                targetrelease = latestfiles[1]
-            elif latestfiles[2] > 0:
-                targetrelease = latestfiles[2]
-            elif latestfiles[3] > 0:
-                targetrelease = latestfiles[3]
+        elif latestfiles[1] > 0:
+            targetrelease = latestfiles[1]
+        elif latestfiles[2] > 0:
+            targetrelease = latestfiles[2]
+        elif latestfiles[3] > 0:
+            targetrelease = latestfiles[3]
         if targetrelease == 0:
             raise RuntimeError(f'{self.name}.\nFailed to find release for your client version.')
 
@@ -81,11 +82,8 @@ class CurseForgeAddon:
                             self.uiVersion = v['gameVersion']
                             break
                 if len(f['dependencies']) > 0:
-                    self.dependencies = []
-                    for d in f['dependencies']:
-                        if d['type'] == 3:
-                            self.dependencies.append(d['addonId'])
-                    if len(self.dependencies) == 0:
+                    self.dependencies = [d['addonId'] for d in f['dependencies'] if d['type'] == 3]
+                    if not self.dependencies:
                         self.dependencies = None
                 break
         else:
@@ -98,7 +96,7 @@ class CurseForgeAddon:
             if '/' not in os.path.dirname(file):
                 self.directories.append(os.path.dirname(file))
         self.directories = list(filter(None, set(self.directories)))
-        if len(self.directories) == 0:
+        if not self.directories:
             raise RuntimeError(f'{self.name}.\nProject package is corrupted or incorrectly packaged.')
 
     def install(self, path):

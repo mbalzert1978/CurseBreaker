@@ -66,7 +66,7 @@ class TUI:
         self.core.init_master_config()
         # Check if executable is in good location
         if not glob.glob('World*.app') and not glob.glob('Wow*.exe') or \
-                not os.path.isdir(Path('Interface/AddOns')) or not os.path.isdir('WTF'):
+                    not os.path.isdir(Path('Interface/AddOns')) or not os.path.isdir('WTF'):
             self.console.print('[bold red]This executable should be placed in the same directory where Wow.exe, '
                                'WowClassic.exe or World of Warcraft.app is located. Additionally, make sure that '
                                'this WoW installation was started at least once.[/bold red]\n')
@@ -182,9 +182,7 @@ class TUI:
                     self.console.print('Press [bold]I[/bold] to enter interactive mode or any other button to close'
                                        ' the application.')
                     keypress = self.handle_keypress(0)
-                    if keypress and keypress.lower() in [b'i', 'i']:
-                        pass
-                    else:
+                    if not keypress or keypress.lower() not in [b'i', 'i']:
                         sys.exit(0)
         if self.headless:
             sys.exit(1)
@@ -197,7 +195,7 @@ class TUI:
             self.console.print('Command [green]import[/green] might be used to detect already installed addons.\n')
         self.motd_parser()
         if self.core.backup_check():
-            self.console.print(f'[green]Backing up WTF directory:[/green]')
+            self.console.print('[green]Backing up WTF directory:[/green]')
             self.core.backup_wtf(self.console)
             self.console.print('')
         # Prompt session
@@ -221,54 +219,61 @@ class TUI:
                     self.console.print('Command not found.')
 
     def auto_update(self):
-        if getattr(sys, 'frozen', False) and 'CURSEBREAKER_VARDEXMODE' not in os.environ:
-            try:
-                if os.path.isfile(sys.executable + '.old'):
-                    try:
-                        os.remove(sys.executable + '.old')
-                    except PermissionError:
-                        pass
+        if (
+            not getattr(sys, 'frozen', False)
+            or 'CURSEBREAKER_VARDEXMODE' in os.environ
+        ):
+            return
+        try:
+            if os.path.isfile(f'{sys.executable}.old'):
                 try:
-                    payload = requests.get('https://api.github.com/repos/AcidWeb/CurseBreaker/releases/latest', headers=HEADERS, timeout=5).json()
-                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-                    return
-                if 'name' in payload and 'body' in payload and 'assets' in payload:
-                    remoteversion = payload['name']
-                    changelog = payload['body']
-                    url = None
-                    for binary in payload['assets']:
-                        if (self.os == 'Windows' and '.exe' in binary['name'])\
-                                or (self.os == 'Darwin' and '.zip' in binary['name'])\
-                                or (self.os == 'Linux' and '.gz' in binary['name']):
-                            url = binary['browser_download_url']
-                            break
-                    if url and StrictVersion(remoteversion[1:]) > StrictVersion(__version__):
-                        self.console.print('[green]Updating CurseBreaker...[/green]')
-                        shutil.move(sys.executable, sys.executable + '.old')
-                        payload = requests.get(url, headers=HEADERS, timeout=5)
-                        if self.os == 'Darwin':
-                            zipfile.ZipFile(io.BytesIO(payload.content)).extractall(path=os.path.dirname(
-                                os.path.abspath(sys.executable)))
-                        else:
-                            with open(sys.executable, 'wb') as f:
-                                if self.os == 'Windows':
-                                    f.write(payload.content)
-                                elif self.os == 'Linux':
-                                    f.write(gzip.decompress(payload.content))
-                        os.chmod(sys.executable, 0o775)
-                        self.console.print(f'[bold green]Update complete! The application will be restarted now.'
-                                           f'[/bold green]\n\n[green]Changelog:[/green]\n{changelog}\n')
-                        self.print_log()
-                        pause(self.headless)
-                        subprocess.call([sys.executable] + sys.argv[1:])
-                        sys.exit(0)
-            except Exception as e:
-                if os.path.isfile(sys.executable + '.old'):
-                    shutil.move(sys.executable + '.old', sys.executable)
-                self.console.print(f'[bold red]Update failed!\n\nReason: {str(e)}[/bold red]\n')
-                self.print_log()
-                pause(self.headless)
-                sys.exit(1)
+                    os.remove(f'{sys.executable}.old')
+                except PermissionError:
+                    pass
+            try:
+                payload = requests.get('https://api.github.com/repos/AcidWeb/CurseBreaker/releases/latest', headers=HEADERS, timeout=5).json()
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+                return
+            if 'name' in payload and 'body' in payload and 'assets' in payload:
+                remoteversion = payload['name']
+                changelog = payload['body']
+                url = next(
+                    (
+                        binary['browser_download_url']
+                        for binary in payload['assets']
+                        if (self.os == 'Windows' and '.exe' in binary['name'])
+                        or (self.os == 'Darwin' and '.zip' in binary['name'])
+                        or (self.os == 'Linux' and '.gz' in binary['name'])
+                    ),
+                    None,
+                )
+                if url and StrictVersion(remoteversion[1:]) > StrictVersion(__version__):
+                    self.console.print('[green]Updating CurseBreaker...[/green]')
+                    shutil.move(sys.executable, f'{sys.executable}.old')
+                    payload = requests.get(url, headers=HEADERS, timeout=5)
+                    if self.os == 'Darwin':
+                        zipfile.ZipFile(io.BytesIO(payload.content)).extractall(path=os.path.dirname(
+                            os.path.abspath(sys.executable)))
+                    else:
+                        with open(sys.executable, 'wb') as f:
+                            if self.os == 'Windows':
+                                f.write(payload.content)
+                            elif self.os == 'Linux':
+                                f.write(gzip.decompress(payload.content))
+                    os.chmod(sys.executable, 0o775)
+                    self.console.print(f'[bold green]Update complete! The application will be restarted now.'
+                                       f'[/bold green]\n\n[green]Changelog:[/green]\n{changelog}\n')
+                    self.print_log()
+                    pause(self.headless)
+                    subprocess.call([sys.executable] + sys.argv[1:])
+                    sys.exit(0)
+        except Exception as e:
+            if os.path.isfile(f'{sys.executable}.old'):
+                shutil.move(f'{sys.executable}.old', sys.executable)
+            self.console.print(f'[bold red]Update failed!\n\nReason: {str(e)}[/bold red]\n')
+            self.print_log()
+            pause(self.headless)
+            sys.exit(1)
 
     def motd_parser(self):
         payload = requests.get('https://storage.googleapis.com/cursebreaker/motd', headers=HEADERS, timeout=5)
@@ -330,8 +335,7 @@ class TUI:
         if self.headless:
             self.console = Console(record=True)
             if self.os == 'Windows':
-                window = windll.kernel32.GetConsoleWindow()
-                if window:
+                if window := windll.kernel32.GetConsoleWindow():
                     windll.user32.ShowWindow(window, 0)
         elif 'WINDIR' in os.environ and 'WT_SESSION' not in os.environ and 'ALACRITTY_LOG' not in os.environ:
             set_terminal_size(100, 50)
@@ -349,20 +353,18 @@ class TUI:
                                  headers=HEADERS, timeout=5).content)))
             except Exception:
                 self.slugs = {'cf': [], 'wowi': [], 'tukui': []}
-        addons = []
-        for addon in sorted(self.core.config['Addons'], key=lambda k: k['Name'].lower()):
-            addons.append(addon['Name'])
+        addons = [
+            addon['Name']
+            for addon in sorted(
+                self.core.config['Addons'], key=lambda k: k['Name'].lower()
+            )
+        ]
         slugs = ['ElvUI', 'Tukui']
-        for item in self.slugs['cf']:
-            slugs.append(f'cf:{item}')
-        for item in self.slugs['wowi']:
-            slugs.append(f'wowi:{item}')
-        for item in self.slugs['ty']:
-            slugs.append(f'ty:{item}')
+        slugs.extend(f'cf:{item}' for item in self.slugs['cf'])
+        slugs.extend(f'wowi:{item}' for item in self.slugs['wowi'])
+        slugs.extend(f'ty:{item}' for item in self.slugs['ty'])
         slugs.extend(['ElvUI:Dev', 'Tukui:Dev', 'Shadow&Light:Dev'])
-        accounts = []
-        for account in self.core.detect_accounts():
-            accounts.append(account)
+        accounts = list(self.core.detect_accounts())
         self.completer = NestedCompleter.from_nested_dict({
             'install': WordCompleter(slugs, ignore_case=True, match_middle=True, WORD=True),
             'uninstall': WordCompleter(addons, ignore_case=True),
@@ -444,7 +446,7 @@ class TUI:
             args = re.sub(r'([a-zA-Z0-9_:])([ ]+)([a-zA-Z0-9_:])', r'\1,\3', args)
             addons = [addon.strip() for addon in list(reader([args], skipinitialspace=True))[0]]
             exceptions = []
-            if len(addons) > 0:
+            if addons:
                 with Progress('{task.completed}/{task.total}', '|', BarColumn(bar_width=None), '|',
                               auto_refresh=False, console=self.console) as progress:
                     task = progress.add_task('', total=len(addons))
@@ -464,12 +466,11 @@ class TUI:
                                 exceptions.append(e)
                             progress.update(task, advance=1, refresh=True)
                 self.console.print(self.table)
-            dependencies = dependencies.parse_dependency()
-            if dependencies:
+            if dependencies := dependencies.parse_dependency():
                 self.setup_table()
                 self.console.print('Installing dependencies:')
                 self.c_install(dependencies, recursion=True)
-            if len(exceptions) > 0:
+            if exceptions:
                 self.handle_exception(exceptions, False)
         else:
             self.console.print('[green]Usage:[/green]\n\tThis command accepts a space-separated list of links as an arg'
@@ -497,17 +498,23 @@ class TUI:
             addons = self.parse_args(args)
             if len(addons) > 0:
                 with Progress('{task.completed}/{task.total}', '|', BarColumn(bar_width=None), '|',
-                              auto_refresh=False, console=self.console) as progress:
+                                          auto_refresh=False, console=self.console) as progress:
                     task = progress.add_task('', total=len(addons))
                     while not progress.finished:
                         for addon in addons:
                             name, version = self.core.del_addon(addon, optkeep)
                             if name:
-                                self.table.add_row(f'[bold red]Uninstalled[/bold red]',
-                                                   Text(name, no_wrap=True), Text(version, no_wrap=True))
+                                self.table.add_row(
+                                    '[bold red]Uninstalled[/bold red]',
+                                    Text(name, no_wrap=True),
+                                    Text(version, no_wrap=True),
+                                )
                             else:
-                                self.table.add_row(f'[bold black]Not installed[/bold black]',
-                                                   Text(addon, no_wrap=True), Text('', no_wrap=True))
+                                self.table.add_row(
+                                    '[bold black]Not installed[/bold black]',
+                                    Text(addon, no_wrap=True),
+                                    Text('', no_wrap=True),
+                                )
                             progress.update(task, advance=1, refresh=True)
                 self.console.print(self.table)
         else:
@@ -527,7 +534,7 @@ class TUI:
         dependencies = DependenciesParser(self.core)
         if len(addons) > 0:
             with Progress('{task.completed:.0f}/{task.total}', '|', BarColumn(bar_width=None), '|',
-                          auto_refresh=False, console=None if self.headless else self.console) as progress:
+                                  auto_refresh=False, console=None if self.headless else self.console) as progress:
                 task = progress.add_task('', total=len(addons))
                 if not args:
                     try:
@@ -539,13 +546,10 @@ class TUI:
                     for addon in addons:
                         try:
                             name, authors, versionnew, versionold, uiversion, modified, blocked, source, sourceurl,\
-                                changelog, deps, dstate = self.core.update_addon(
+                                    changelog, deps, dstate = self.core.update_addon(
                                     addon if isinstance(addon, str) else addon['URL'], update, force)
                             dependencies.add_dependency(deps)
-                            if provider:
-                                source = f' [bold white]{source}[/bold white]'
-                            else:
-                                source = ''
+                            source = f' [bold white]{source}[/bold white]' if provider else ''
                             if versionold:
                                 if versionold == versionnew:
                                     if modified:
@@ -553,27 +557,25 @@ class TUI:
                                                            self.parse_link(name, sourceurl, authors=authors),
                                                            self.parse_link(versionold, changelog, dstate,
                                                                            uiversion=uiversion))
+                                    elif compact and compacted > -1:
+                                        compacted += 1
                                     else:
-                                        if compact and compacted > -1:
-                                            compacted += 1
-                                        else:
-                                            self.table.add_row(f'[green]Up-to-date[/green]{source}',
-                                                               self.parse_link(name, sourceurl, authors=authors),
-                                                               self.parse_link(versionold, changelog, dstate,
-                                                                               uiversion=uiversion))
-                                else:
-                                    if modified or blocked:
-                                        self.table.add_row(f'[bold red]Update suppressed[/bold red]{source}',
+                                        self.table.add_row(f'[green]Up-to-date[/green]{source}',
                                                            self.parse_link(name, sourceurl, authors=authors),
                                                            self.parse_link(versionold, changelog, dstate,
                                                                            uiversion=uiversion))
-                                    else:
-                                        version = self.parse_link(versionnew, changelog, dstate, uiversion=uiversion)
-                                        version.stylize('yellow')
-                                        self.table.add_row(
-                                            f'[yellow]{"Updated" if update else "Update available"}[/yellow]{source}',
-                                            self.parse_link(name, sourceurl, authors=authors),
-                                            version)
+                                elif modified or blocked:
+                                    self.table.add_row(f'[bold red]Update suppressed[/bold red]{source}',
+                                                       self.parse_link(name, sourceurl, authors=authors),
+                                                       self.parse_link(versionold, changelog, dstate,
+                                                                       uiversion=uiversion))
+                                else:
+                                    version = self.parse_link(versionnew, changelog, dstate, uiversion=uiversion)
+                                    version.stylize('yellow')
+                                    self.table.add_row(
+                                        f'[yellow]{"Updated" if update else "Update available"}[/yellow]{source}',
+                                        self.parse_link(name, sourceurl, authors=authors),
+                                        version)
                             else:
                                 self.table.add_row(f'[bold black]Not installed[/bold black]{source}',
                                                    Text(addon, no_wrap=True),
@@ -595,18 +597,19 @@ class TUI:
             self.console.print('Apparently there are no addons installed by CurseBreaker (or you provided incorrect add'
                                'on name).\nCommand [green]import[/green] might be used to detect already installed addo'
                                'ns.', highlight=False)
-        if len(exceptions) > 0:
+        if exceptions:
             self.handle_exception(exceptions, False)
 
     def c_force_update(self, args):
         if args:
             self.c_update(args, False, True, True)
-        else:
-            # noinspection PyTypeChecker
-            answer = confirm(HTML('<ansibrightred>Execute a forced update of all addons and overwrite ALL local '
-                                  'changes?</ansibrightred>'))
-            if answer:
-                self.c_update(False, False, True, True)
+        elif answer := confirm(
+            HTML(
+                '<ansibrightred>Execute a forced update of all addons and overwrite ALL local '
+                'changes?</ansibrightred>'
+            )
+        ):
+            self.c_update(False, False, True, True)
 
     def c_status(self, args):
         optsource = False
@@ -647,8 +650,7 @@ class TUI:
         if args:
             args = args.strip()
             if args.startswith('channel'):
-                args = args[8:]
-                if args:
+                if args := args[8:]:
                     status = self.core.dev_toggle(args)
                     if status is None:
                         self.console.print('[bold red]This addon doesn\'t exist or it is not installed yet.[/bold red]')
@@ -670,8 +672,7 @@ class TUI:
                     self.console.print('[green]Usage:[/green]\n\tThis command accepts an addon name (or "global") as an'
                                        ' argument.', highlight=False)
             elif args.startswith('pinning'):
-                args = args[8:]
-                if args:
+                if args := args[8:]:
                     status = self.core.block_toggle(args)
                     if status is None:
                         self.console.print('[bold red]This addon does not exist or it is not installed yet.[/bold red]')
@@ -682,8 +683,7 @@ class TUI:
                 else:
                     self.console.print('[green]Usage:[/green]\n\tThis command accepts an addon name as an argument.')
             elif args.startswith('wago'):
-                args = args[5:]
-                if args:
+                if args := args[5:]:
                     if args == self.core.config['WAUsername']:
                         self.console.print(f'Wago version check is now: [green]ENABLED[/green]\nEntries created by '
                                            f'[bold white]{self.core.config["WAUsername"]}[/bold white] are now '
@@ -694,14 +694,13 @@ class TUI:
                         self.console.print(f'Wago version check is now: [green]ENABLED[/green]\nEntries created by '
                                            f'[bold white]{self.core.config["WAUsername"]}[/bold white] are now '
                                            f'ignored.')
+                elif self.core.config['WAUsername'] == 'DISABLED':
+                    self.core.config['WAUsername'] = ''
+                    self.console.print('Wago version check is now: [green]ENABLED[/green]')
                 else:
-                    if self.core.config['WAUsername'] == 'DISABLED':
-                        self.core.config['WAUsername'] = ''
-                        self.console.print('Wago version check is now: [green]ENABLED[/green]')
-                    else:
-                        self.core.config['WAUsername'] = 'DISABLED'
-                        shutil.rmtree(Path('Interface/AddOns/WeakAurasCompanion'), ignore_errors=True)
-                        self.console.print('Wago version check is now: [red]DISABLED[/red]')
+                    self.core.config['WAUsername'] = 'DISABLED'
+                    shutil.rmtree(Path('Interface/AddOns/WeakAurasCompanion'), ignore_errors=True)
+                    self.console.print('Wago version check is now: [red]DISABLED[/red]')
                 self.core.save_config()
             elif args.startswith('authors'):
                 status = self.core.generic_toggle('ShowAuthors')
@@ -738,8 +737,7 @@ class TUI:
         if args:
             args = args.strip()
             if args.startswith('wago_api'):
-                args = args[9:]
-                if args:
+                if args := args[9:]:
                     self.console.print('Wago API key is now set.')
                     self.core.config['WAAPIKey'] = args.strip()
                     self.core.save_config()
@@ -750,11 +748,10 @@ class TUI:
                 else:
                     self.console.print('[green]Usage:[/green]\n\tThis command accepts API key as an argument.')
             elif args.startswith('wago_wow_account'):
-                args = args[17:]
-                if args:
+                if args := args[17:]:
                     args = args.strip()
                     if os.path.isfile(Path(f'WTF/Account/{args}/SavedVariables/WeakAuras.lua')) or \
-                            os.path.isfile(Path(f'WTF/Account/{args}/SavedVariables/Plater.lua')):
+                                os.path.isfile(Path(f'WTF/Account/{args}/SavedVariables/Plater.lua')):
                         self.console.print(f'WoW account name set to: [bold white]{args}[/bold white]')
                         self.core.config['WAAccountName'] = args
                         self.core.save_config()
@@ -879,7 +876,7 @@ class TUI:
         if args == 'install' and len(hit) > 0:
             self.c_install(','.join(hit))
         else:
-            self.console.print(f'[green]Addons found:[/green]')
+            self.console.print('[green]Addons found:[/green]')
             for addon in hit:
                 self.console.print(addon, highlight=False)
             self.console.print(f'\n[yellow]Possible matches:[/yellow]')
@@ -961,8 +958,7 @@ class TUI:
 
 if __name__ == '__main__':
     freeze_support()
-    clientpath = os.environ.get('CURSEBREAKER_PATH')
-    if clientpath:
+    if clientpath := os.environ.get('CURSEBREAKER_PATH'):
         os.chdir(clientpath)
     elif getattr(sys, 'frozen', False):
         os.chdir(os.path.dirname(os.path.abspath(sys.executable)))
